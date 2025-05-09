@@ -36,10 +36,3 @@ popcorn_lung_xray_classifier/
 ├── README.md # Project overview and instructions
 └── config.yaml # Configuration file
 
-
-Installation
-
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/yourusername/popcorn_lung_xray_classifier.git
-   cd popcorn_lung_xray_classifier
