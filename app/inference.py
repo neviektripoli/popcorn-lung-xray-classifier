@@ -1,25 +1,42 @@
+import os
+import numpy as np
 import tensorflow as tf
-from src.data_loader import preprocess_image
-import argparse
+from src.utils import preprocess_image
 
-def predict_xray(model_path, image_path):
-    """Predict popcorn lung on a single X-ray."""
-    # Load model
-    model = tf.keras.models.load_model(model_path)
+class PopcornLungPredictor:
+    def __init__(self, model_path='outputs/models/best_model.h5'):
+        self.model = tf.keras.models.load_model(model_path)
+        self.img_size = 224  # Should match training size
+    
+    def predict(self, image_path):
+        """Predict popcorn lung probability for a given X-ray image"""
+        # Preprocess the image
+        img = preprocess_image(image_path, self.img_size)
+        if img is None:
+            return {"error": "Could not load or process the image"}
+        
+        # Make prediction
+        prediction = self.model.predict(img)[0][0]
+        probability = float(prediction)
+        
+        # Return results
+        return {
+            "probability": probability,
+            "diagnosis": "Positive" if probability > 0.5 else "Negative",
+            "confidence": probability if probability > 0.5 else 1 - probability
+        }
 
-    # Preprocess image
-    img = preprocess_image(image_path)
-
-    # Predict
-    pred = model.predict(img[np.newaxis, ...])[0][0]
-    label = 'Popcorn Lung' if pred > 0.5 else 'Healthy'
-    return label, pred
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Predict popcorn lung from X-ray.')
-    parser.add_argument('--model', required=True, help='Path to trained model')
-    parser.add_argument('--image', required=True, help='Path to X-ray image')
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Popcorn Lung X-ray Classifier')
+    parser.add_argument('image_path', type=str, help='Path to the chest X-ray image')
     args = parser.parse_args()
-
-    label, prob = predict_xray(args.model, args.image)
-    print(f'Prediction: {label} (Probability: {prob:.2f})')
+    
+    predictor = PopcornLungPredictor()
+    result = predictor.predict(args.image_path)
+    
+    print("\nPrediction Results:")
+    print(f"Probability of Popcorn Lung: {result['probability']:.4f}")
+    print(f"Diagnosis: {result['diagnosis']}")
+    print(f"Confidence: {result['confidence']:.2%}")
