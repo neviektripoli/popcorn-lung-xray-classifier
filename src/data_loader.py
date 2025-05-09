@@ -1,60 +1,69 @@
 import os
 import cv2
+import yaml
 import numpy as np
 import pandas as pd
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.utils import to_categorical
 
-def preprocess_image(image_path, target_size=(224, 224)):
-    """Load and preprocess a single X-ray image."""
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    if img is None:
-        raise ValueError(f"Failed to load image: {image_path}")
-    img = cv2.resize(img, target_size)
-    img = img / 255.0  # Normalize to [0, 1]
-    img = np.expand_dims(img, axis=-1)  # Add channel dimension
-    return img
-
-def create_data_generator():
-    """Create data generator with augmentations."""
-    return ImageDataGenerator(
-        rotation_range=10,
-        width_shift_range=0.1,
-        height_shift_range=0.1,
-        zoom_range=0.1,
-        horizontal_flip=True,
-        fill_mode='nearest',
-        validation_split=0.2
-    )
-
-def load_data(data_dir, labels_file, target_size=(224, 224)):
-    """Load and prepare data for training."""
-    labels_df = pd.read_csv(labels_file)
-    datagen = create_data_generator()
-
-    train_generator = datagen.flow_from_dataframe(
-        dataframe=labels_df,
-        directory=data_dir,
-        x_col='filename',
-        y_col='target',
-        target_size=target_size,
-        color_mode='grayscale',
-        class_mode='binary',
-        batch_size=32,
-        subset='training',
-        shuffle=True
-    )
-
-    validation_generator = datagen.flow_from_dataframe(
-        dataframe=labels_df,
-        directory=data_dir,
-        x_col='filename',
-        y_col='target',
-        target_size=target_size,
-        color_mode='grayscale',
-        class_mode='binary',
-        batch_size=32,
-        subset='validation',
-        shuffle=False
-    )
-
-    return train_generator, validation_generator
+class DataLoader:
+    def __init__(self, config_path='config.yaml'):
+        with open(config_path, 'r') as f:
+            self.config = yaml.safe_load(f)
+        
+        self.img_size = self.config['data']['img_size']
+        self.batch_size = self.config['data']['batch_size']
+        
+    def load_data(self):
+        """Load and preprocess the data"""
+        # Read labels
+        df = pd.read_csv(self.config['data']['labels_file'])
+        
+        # Load and preprocess images
+        images = []
+        labels = []
+        
+        for idx, row in df.iterrows():
+            img_path = os.path.join(self.config['data']['raw_path'], row['filename'])
+            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+            
+            if img is not None:
+                # Resize and normalize
+                img = cv2.resize(img, (self.img_size, self.img_size))
+                img = img / 255.0
+                img = np.expand_dims(img, axis=-1)  # Add channel dimension
+                
+                images.append(img)
+                labels.append(row['target'])
+        
+        # Convert to numpy arrays
+        images = np.array(images)
+        labels = np.array(labels)
+        
+        # One-hot encode labels if needed
+        if len(np.unique(labels)) > 2:
+            labels = to_categorical(labels)
+        
+        # Split into train and test sets
+        X_train, X_test, y_train, y_test = train_test_split(
+            images, labels,
+            test_size=self.config['data']['test_size'],
+            random_state=self.config['data']['random_state'],
+            stratify=labels
+        )
+        
+        return X_train, X_test, y_train, y_test
+    
+    def data_generator(self, X, y, batch_size=32, shuffle=True):
+        """Create a data generator for training"""
+        num_samples = len(X)
+        indices = np.arange(num_samples)
+        
+        if shuffle:
+            np.random.shuffle(indices)
+            
+        for start_idx in range(0, num_samples, batch_size):
+            end_idx = min(start_idx + batch_size, num_samples)
+            batch_indices = indices[start_idx:end_idx]
+            
+            yield X[batch_indices], y[batch_indices]
