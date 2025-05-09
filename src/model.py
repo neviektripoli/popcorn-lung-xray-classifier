@@ -1,34 +1,71 @@
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+from tensorflow.keras.layers import (
+    Conv2D, MaxPooling2D, Flatten, 
+    Dense, Dropout, BatchNormalization
+)
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+import yaml
 
-def build_cnn(input_shape=(224, 224, 1)):
-    """Build a simple CNN for binary classification."""
-    model = Sequential([
-        Conv2D(32, (3, 3), activation='relu', input_shape=input_shape),
-        MaxPooling2D((2, 2)),
-        Conv2D(64, (3, 3), activation='relu'),
-        MaxPooling2D((2, 2)),
-        Conv2D(128, (3, 3), activation='relu'),
-        MaxPooling2D((2, 2)),
-        Flatten(),
-        Dense(128, activation='relu'),
-        Dropout(0.5),
-        Dense(1, activation='sigmoid')  # Binary classification
-    ])
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy', 'AUC'])
-    return model
-
-# For transfer learning (optional):
-# from tensorflow.keras.applications import ResNet50
-# def build_transfer_model(input_shape=(224, 224, 1)):
-#     base_model = ResNet50(weights='imagenet', include_top=False, input_shape=input_shape)
-#     base_model.trainable = False
-#     model = Sequential([
-#         base_model,
-#         Flatten(),
-#         Dense(128, activation='relu'),
-#         Dropout(0.5),
-#         Dense(1, activation='sigmoid')
-#     ])
-#     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy', 'AUC'])
-#     return model
+class PopcornLungModel:
+    def __init__(self, config_path='config.yaml'):
+        with open(config_path, 'r') as f:
+            self.config = yaml.safe_load(f)
+            
+        self.img_size = self.config['data']['img_size']
+        self.learning_rate = self.config['model']['learning_rate']
+        
+    def build_cnn(self):
+        """Build the CNN model architecture"""
+        model = Sequential([
+            # First convolutional block
+            Conv2D(32, (3, 3), activation='relu', input_shape=(self.img_size, self.img_size, 1)),
+            BatchNormalization(),
+            MaxPooling2D((2, 2)),
+            Dropout(0.2),
+            
+            # Second convolutional block
+            Conv2D(64, (3, 3), activation='relu'),
+            BatchNormalization(),
+            MaxPooling2D((2, 2)),
+            Dropout(0.3),
+            
+            # Third convolutional block
+            Conv2D(128, (3, 3), activation='relu'),
+            BatchNormalization(),
+            MaxPooling2D((2, 2)),
+            Dropout(0.4),
+            
+            # Flatten and dense layers
+            Flatten(),
+            Dense(256, activation='relu'),
+            BatchNormalization(),
+            Dropout(0.5),
+            Dense(1, activation='sigmoid')  # Binary classification
+        ])
+        
+        # Compile the model
+        optimizer = Adam(learning_rate=self.learning_rate)
+        model.compile(
+            optimizer=optimizer,
+            loss='binary_crossentropy',
+            metrics=['accuracy', 'AUC']
+        )
+        
+        return model
+    
+    def get_callbacks(self):
+        """Get training callbacks"""
+        callbacks = [
+            EarlyStopping(
+                monitor='val_loss',
+                patience=self.config['model']['early_stopping_patience'],
+                restore_best_weights=True
+            ),
+            ModelCheckpoint(
+                filepath=self.config['paths']['model_save'],
+                monitor='val_loss',
+                save_best_only=True
+            )
+        ]
+        return callbacks
