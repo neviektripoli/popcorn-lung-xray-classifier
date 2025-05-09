@@ -1,13 +1,20 @@
+# config.yaml
 data:
-  raw_dir: data/raw/
-  processed_dir: data/processed/
-  labels_file: data/labels.csv
-model:
-  input_shape: [224, 224, 1]
+  raw_path: "data/raw"
+  processed_path: "data/processed"
+  labels_file: "data/labels.csv"
+  img_size: 224
   batch_size: 32
-  epochs: 50
+  test_size: 0.2
+  random_state: 42
+
+model:
+  architecture: "custom_cnn"
   learning_rate: 0.001
-output:
-  model_dir: outputs/models/
-  log_dir: outputs/logs/
-  result_dir: outputs/results/
+  epochs: 30
+  early_stopping_patience: 5
+
+paths:
+  model_save: "outputs/models/best_model.h5"
+  logs: "outputs/logs/"
+  results: "outputs/results/"
